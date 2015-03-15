@@ -6,20 +6,162 @@ output:
 ---
 
 
-## Loading and preprocessing the data
+## Loading and preprocessing the data  
 
+### 1. load the data and library
+```{r echo=TRUE}
+setwd("F:/Users/Macbook/Desktop/Data Science/5.Reproducible data")
+src.data <- read.csv(file='activity.csv', as.is=TRUE)
+data <- src.data # keep copy of original data set
+library(plyr)
 
+```
+### 2. format the data
+```{r echo=TRUE}
+data[,2] <- as.Date(src.data[,2], "%Y-%m-%d")
+data <- data[complete.cases(data),]
+
+```
+
+  
 
 ## What is mean total number of steps taken per day?
+### 1. total number of steps taken per day
+```{r echo=TRUE}
+steps.per.day <- ddply(data, .(date), summarize, total=sum(steps))
+```
+```{r echo=TRUE}
+steps.per.day
+```
 
+### 2. histogram of total steps per day
+```{r echo=TRUE}
+par(mar = rep(4, 4))
+hist(steps.per.day[,2], breaks=20, 
+     main="Histogram of number of steps per day", xlab="steps per day")
+```
 
-
+### 3. mean and median of total steps per day
+From the summary below, we observe that the mean equals 10766
+and the median equals 10765.
+```{r echo=TRUE}
+summary(steps.per.day)
+```
+  
 ## What is the average daily activity pattern?
+## 1. time interval (x-axis) vs averaged steps count across all days (y-axis)
+```{r echo=TRUE}
+# mean steps count grouped by interval
+ave.steps.per.interval <- ddply(data, .(interval), summarize, ave.steps=mean(steps))
+plot(ave.steps.per.interval[,1], ave.steps.per.interval[,2], type='l'
+     , xlab="Intervals", ylab="ave. steps across days")
+```
 
+### 2. which interval has max number of steps
+From the summary below, we observe that the interval with max number of steps is of rounded value 206.170. And the interval with this max count is 835.
+```{r echo=TRUE}
 
+summary(ave.steps.per.interval)
 
+interval.max <- subset(ave.steps.per.interval, ave.steps.per.interval[,2]<207 & ave.steps.per.interval[,2]>206)
+interval.max
+```
+
+  
 ## Imputing missing values
+### 1. total number of missing values
+```{r echo=TRUE}
+# total rows of original data set, minus total rows of complete data set.
+na.rows <- nrow(src.data)-nrow(data)
+na.rows
+```
+
+### 2. devise strategy to replace all NA
+We shall use the mean for each interval calculated earlier across all the days, to substitute each value in each respective 'NA' interval.
+```{r echo=TRUE}
+# create a clean copy of data to modify on
+modify.data <- src.data
+
+# let us find out interval count to be used in below's 'FOR' loop. We find that this count is 288.
+interval.count <- unique(modify.data$interval)
+length(interval.count)
+
+# we should also ensure that the values we use for replacement carry the full interval set
+length(unique(data[,3]))
+
+```
+
+### 3. create new dataset, replacing all NA with mean steps count
+```{r echo=TRUE}
+
+counter <- 1 # initialise counter
+for (i in 1:17568) {
+        if(is.na(modify.data[i ,1]))
+                modify.data[i, 1] <- ave.steps.per.interval[counter, 2]
+        
+        counter <- counter +1
+        if(counter==289)
+                counter <- 1 # reset counter
+}
+```
+Original data had 'NA' values at the beginning. Now they should be gone.
+```{r echo=TRUE}
+head(modify.data)
+```
+
+### 4. histogram of number of steps each day
+```{r echo=TRUE}
+# total steps count grouped by date
+steps.per.day.full <- ddply(modify.data, .(date), summarize, steps.count=sum(steps))
+hist(steps.per.day.full[,2], breaks=20, main="histogram of steps per day full set", 
+     xlab="steps per day")
+     
+```
 
 
+We can observe from the summary that the mean and median are both 10766 with the created full set of data. There is not much difference compared with first part of the assignment, because substituting with its own average values is likely to result in similar mean & median values.
+```{r echo=TRUE}
+summary(steps.per.day.full)
 
+```
 ## Are there differences in activity patterns between weekdays and weekends?
+### 1. create weekdays factor variable
+```{r echo=TRUE}
+weekday <- weekdays(as.Date(modify.data$date), 1)
+weekday <- as.data.frame(weekday, stringsAsFactors=FALSE) # keep them as string for substitution later
+```
+
+```{r echo=TRUE}
+# substitute values for weekday or weekend
+for(i in 1:nrow(weekday)) {
+        if(weekday[i,1]=="Sat" || weekday[i,1]=="Sun")
+                weekday[i,1] <- "Weekend"
+        else weekday[i,1] <- "Weekday"
+}
+
+weekday[,1] <- as.factor(weekday[,1]) # convert back to factor as required by assignment
+
+modify.data <- cbind(modify.data, weekday)
+```
+
+### 2. interval (x-axis) vs ave. number of steps ave across weekdays (y-axis)
+We subset the weekday results, group it by interval, then plot the 1st graph.
+We then also subset the weekend results, group it by interval, then plot the 2nd graph.
+```{r echo=TRUE}
+par(mfrow=c(2,1))
+
+# 1st graph comes here
+ave.steps.per.interval.weekday <- subset(modify.data, modify.data$weekday =="Weekday")
+result1 <- ddply(ave.steps.per.interval.weekday, .(interval), summarize, mean(steps))
+
+plot(result1[,1], result1[,2], type='l', main="Weekday", ylab="Ave. steps frequency",
+     xlab="interval")
+
+# 2nd graph comes here
+ave.steps.per.interval.weekend <- subset(modify.data, modify.data$weekday =="Weekend")
+result2 <- ddply(ave.steps.per.interval.weekend, .(interval), summarize, mean(steps))
+
+plot(result2[,1], result2[,2], type='l', main="Weekend", ylab="Ave. steps frequency",
+     xlab="interval")
+
+```
